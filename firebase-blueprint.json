@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "sessions": {
+      "title": "Chat Session",
+      "description": "A single chat session between a user and the AI counselor.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this session." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the session was created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the last message was sent." },
+        "title": { "type": "string", "description": "A short summary or first message snippet." }
+      },
+      "required": ["userId", "createdAt", "updatedAt"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "An individual message within a session.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["role", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "sessions",
+      "description": "User counseling sessions."
+    },
+    "/sessions/{sessionId}/messages/{messageId}": {
+      "schema": "messages",
+      "description": "Messages within a specific counseling session."
+    }
+  }
+}

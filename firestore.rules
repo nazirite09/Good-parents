@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Sessions
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(sessionId)
+        && isValidSession(incoming())
+        && isOwner(incoming().userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && isOwner(existing().userId)
+        && isValidSession(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Allow title change or just updatedAt for new messages
+          incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'title'])
+        );
+
+      allow delete: if isSignedIn() && isOwner(existing().userId);
+
+      // Sub-collection for messages
+      match /messages/{messageId} {
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/sessions/$(sessionId)).data.userId == request.auth.uid;
+        allow get: if isSignedIn() && get(/databases/$(database)/documents/sessions/$(sessionId)).data.userId == request.auth.uid;
+        
+        allow create: if isSignedIn()
+          && isValidId(messageId)
+          && get(/databases/$(database)/documents/sessions/$(sessionId)).data.userId == request.auth.uid
+          && isValidMessage(incoming())
+          && incoming().createdAt == request.time;
+      }
+    }
+
+    // Entity validation blueprints
+    function isValidSession(data) {
+      return data.keys().hasAll(['userId', 'createdAt', 'updatedAt'])
+        && data.userId is string
+        && (data.get('title', '') is string && data.get('title', '').size() <= 500);
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['role', 'text', 'createdAt'])
+        && data.role in ['user', 'model']
+        && data.text is string
+        && data.text.size() <= 5000;
+    }
+  }
+}
